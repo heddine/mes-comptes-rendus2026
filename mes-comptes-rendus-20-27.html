@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mes comptes rendus</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1F2430" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Mes CR" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #F7F8FA;
+    --ink: #1F2430;
+    --ink-soft: #3A3F47;
+    --muted: #8A8F98;
+    --line: #E4E7EC;
+    --scanner: #2B6CB0; --scanner-bg: #EAF1FA;
+    --echo: #2F855A; --echo-bg: #EAF6EF;
+    --doppler: #B7791F; --doppler-bg: #FBF3E4;
+    --analyse: #975A9A; --analyse-bg: #F4ECF6;
+    --radio: #2D3748; --radio-bg: #EDF2F7;
+    --ordonnance-med: #276749; --ordonnance-med-bg: #E6F4EE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    padding-bottom: 40px;
+  }
+  button, input, textarea { font-family: inherit; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--scanner); outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  @keyframes slideUp { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform: translateY(0);} }
+  @keyframes fadeIn { from {opacity:0;} to {opacity:1;} }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 18px 12px;
+    gap: 12px;
+  }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.08em; color: var(--muted);
+    font-weight: 700; margin-bottom: 2px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  #addBtn {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--ink); color: #fff; border: none;
+    border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  #warningBanner {
+    margin: 0 18px 10px; background: var(--doppler-bg); color: #7A4E14;
+    font-size: 13px; padding: 10px 12px; border-radius: 8px; display: none;
+  }
+  .search-bar {
+    display: flex; align-items: center; gap: 8px; margin: 0 18px 12px;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .search-bar input {
+    border: none; outline: none; font-size: 14px; flex: 1; background: transparent; color: var(--ink);
+  }
+  .chips-row {
+    display: flex; gap: 8px; overflow-x: auto; padding: 0 18px 16px;
+  }
+  .chip {
+    flex-shrink: 0; border: 1px solid var(--line); background: #fff; color: var(--ink-soft);
+    border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .chip.active { color: #fff; border-color: var(--ink); background: var(--ink); }
+  #list { padding: 0 18px; display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    display: flex; align-items: center; gap: 12px; background: #fff;
+    border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+    cursor: pointer; animation: slideUp .3s ease backwards;
+  }
+  .icon-wrap {
+    width: 42px; height: 42px; border-radius: 10px; display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .icon-wrap svg { width: 20px; height: 20px; }
+  .card-label {
+    font-size: 14px; font-weight: 600; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn {
+    border: none; background: #F1F2F5; border-radius: 8px; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-soft);
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .empty-state {
+    text-align: center; padding: 60px 20px; display: flex; flex-direction: column; align-items: center;
+  }
+  .empty-state svg { width: 36px; height: 36px; color: #C7CCD4; }
+  .empty-state p.title { margin: 12px 0 4px; font-weight: 600; color: var(--ink-soft); }
+  .empty-state p.sub { margin: 0; font-size: 14px; color: var(--muted); }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(20,22,28,.45); display: none;
+    align-items: flex-end; justify-content: center; z-index: 50; animation: fadeIn .15s ease;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 18px 18px 0 0; width: 100%; max-width: 480px;
+    max-height: 88vh; overflow-y: auto; animation: slideUp .25s ease;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between; padding: 16px 18px;
+    border-bottom: 1px solid #EEF0F3; position: sticky; top: 0; background: #fff;
+  }
+  .modal-title { font-size: 17px; font-weight: 700; margin: 0; }
+  .close-btn {
+    border: none; background: #F1F2F5; border-radius: 8px; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-soft); flex-shrink: 0;
+  }
+  .close-btn svg { width: 18px; height: 18px; }
+  .modal-body { padding: 18px; }
+  .field-label {
+    display: block; font-size: 12px; font-weight: 700; color: var(--muted);
+    letter-spacing: .03em; margin-bottom: 8px; margin-top: 16px;
+  }
+  .cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .cat-option {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 18px 4px 16px; text-align: center;
+    border-radius: 16px; border: 3px solid transparent;
+    cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+    min-height: 90px;
+  }
+  .cat-option svg { width: 30px; height: 30px; }
+  .cat-option span { font-size: 11px; font-weight: 800; line-height: 1.3; }
+  .text-input, textarea.text-area {
+    width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    font-size: 14px; outline: none; font-family: inherit;
+  }
+  textarea.text-area { resize: vertical; }
+  .file-badge {
+    display: flex; align-items: center; gap: 8px; background: var(--scanner-bg);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .file-badge svg { width: 16px; height: 16px; color: var(--scanner); }
+  .pdf-link {
+    display: flex; align-items: center; gap: 8px; background: var(--scanner-bg); color: var(--scanner);
+    border-radius: 10px; padding: 12px 14px; font-size: 14px; font-weight: 600;
+    text-decoration: none; margin-bottom: 14px;
+  }
+  .pdf-link svg { width: 16px; height: 16px; }
+  .text-block { background: var(--bg); border-radius: 10px; padding: 14px; }
+  .text-block .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .text-block .content { font-size: 14px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.5; }
+  .reclass-panel {
+    display: none; padding: 0 18px 16px; border-top: 1px solid #EEF0F3; background: #fff; position: relative; z-index: 2;
+  }
+  .reclass-panel.open { display: block; padding-top: 16px; animation: slideUp .2s ease; }
+  .modal-footer {
+    padding: 16px; border-top: 1px solid #EEF0F3; position: sticky; bottom: 0; background: #fff;
+  }
+  .footer-row { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .footer-actions { display: flex; gap: 8px; width: 100%; }
+  .action-btn {
+    display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: #fff;
+    color: var(--ink); border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .action-btn svg { width: 15px; height: 15px; }
+  .gemini-btn { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .delete-btn {
+    display: flex; align-items: center; justify-content: center; border: 1px solid #F4D2D2;
+    background: #FDF2F2; color: #C0392B; border-radius: 10px; padding: 10px 12px; cursor: pointer; margin-left: auto;
+  }
+  .delete-btn svg { width: 15px; height: 15px; }
+  .secondary-btn, .primary-btn {
+    border-radius: 10px; padding: 11px 16px; font-size: 14px; font-weight: 600; cursor: pointer; border: none;
+  }
+  .secondary-btn { background: #F1F2F5; color: var(--ink-soft); flex: 1; }
+  .primary-btn {
+    background: var(--ink); color: #fff; flex: 1; display: flex; align-items: center;
+    justify-content: center; gap: 6px;
+  }
+  .primary-btn svg { width: 16px; height: 16px; }
+  .modal-footer-buttons { display: flex; gap: 10px; }
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 13px; font-weight: 500; z-index: 100; animation: slideUp .2s ease; display: none;
+  }
+  img.preview { width: 100%; border-radius: 10px; margin-bottom: 14px; border: 1px solid var(--line); display: block; cursor: zoom-in; }
+  .pdf-viewer-wrap {
+    width: 100%; max-height: 60vh; border-radius: 10px; overflow-y: auto; overflow-x: hidden;
+    border: 1px solid var(--line); margin-bottom: 10px; background: #525659;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px;
+  }
+  .pdf-viewer-wrap canvas { width: 100%; height: auto; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .pdf-viewer-status { color: #fff; font-size: 13px; padding: 30px 0; opacity: .85; }
+  #detailOverlay .modal { max-width: 640px; }
+
+  .img-lightbox {
+    position: fixed; inset: 0; background: rgba(10,11,14,.92); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+    animation: fadeIn .15s ease;
+  }
+  .img-lightbox.open { display: flex; }
+  .img-lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+  .img-lightbox-close {
+    position: absolute; top: 18px; right: 18px; border: none; background: rgba(255,255,255,.12);
+    color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; cursor: pointer;
+  }
+  .img-lightbox-close svg { width: 18px; height: 18px; }
+  iframe.pdf-preview { width: 100%; height: 360px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--line); }
+  .preview-wrap { margin-bottom: 14px; }
+  .preview-open-link {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--scanner);
+    text-decoration: none; font-weight: 600; margin-top: 8px;
+  }
+  .preview-open-link svg { width: 13px; height: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">DOSSIER PERSONNEL</div>
+    <h1>Mes comptes rendus</h1>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+    <button id="exportBtn" title="Exporter toutes les données" style="display:flex;align-items:center;gap:5px;background:#F1F2F5;color:#3A3F47;border:none;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exporter
+    </button>
+    <button id="importBtn" title="Importer une sauvegarde" style="display:flex;align-items:center;gap:5px;background:#F1F2F5;color:#3A3F47;border:none;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importer
+    </button>
+    <button id="autoClassBtn" title="Auto-reclasser" style="display:flex;align-items:center;gap:5px;background:#F1F2F5;color:#3A3F47;border:none;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+      Reclasser
+    </button>
+    <button id="addBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Ajouter
+    </button>
+  </div>
+  <input id="fileInput" type="file" accept="application/pdf,image/*" style="display:none" />
+  <input id="importInput" type="file" accept="application/json" style="display:none" />
+</header>
+
+<div id="warningBanner">La sauvegarde a échoué pour le dernier changement. Vérifiez votre connexion.</div>
+
+<div id="backupBanner" style="display:none;margin:10px 16px 0;background:#FFF8E6;border:1.5px solid #F59E0B;border-radius:12px;padding:12px 14px;font-size:13px;color:#7C4A00;line-height:1.5;">
+  <div style="display:flex;align-items:flex-start;gap:10px;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" width="20" height="20" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div style="flex:1;">
+      <strong>Pensez à exporter vos données</strong> avant toute mise à jour du fichier sur GitHub. Vos fiches sont stockées dans ce navigateur uniquement.
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button id="bannerExportBtn" style="background:#F59E0B;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">↓ Exporter maintenant</button>
+        <button id="bannerDismissBtn" style="background:none;color:#7C4A00;border:1.5px solid #F59E0B;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Ne plus afficher</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="search-bar">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#8A8F98" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input id="searchInput" placeholder="Rechercher un compte rendu…" />
+</div>
+
+<div style="padding: 0 18px 16px;">
+  <button id="filterAllBtn" class="cat-option" style="width:100%;margin-bottom:10px;flex-direction:row;gap:8px;min-height:44px;padding:10px 14px;justify-content:center;border-radius:12px;"></button>
+  <div class="cat-grid" id="filterGrid"></div>
+</div>
+
+<main id="list"></main>
+
+<!-- Overlay choix source -->
+<div class="overlay" id="sourceOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Nouveau compte rendu</h2>
+      <button class="close-btn" id="cancelSource">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:20px;padding-bottom:28px;">
+      <button id="srcFileBtn" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#EAF1FA;border:2px solid #2B6CB0;border-radius:16px;padding:28px 12px;cursor:pointer;font-size:13px;font-weight:700;color:#2B6CB0;line-height:1.3;aspect-ratio:1;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Joindre un fichier<br>PDF / image
+      </button>
+      <button id="srcTextBtn" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#E6F4EE;border:2px solid #276749;border-radius:16px;padding:28px 12px;cursor:pointer;font-size:13px;font-weight:700;color:#276749;line-height:1.3;aspect-ratio:1;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+        Saisie texte<br>uniquement
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay upload -->
+<div class="overlay" id="uploadOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Nouveau compte rendu</h2>
+      <button class="close-btn" id="cancelUpload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="file-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span id="fileBadgeName" style="font-size:13px;color:#3A3F47;"></span>
+      </div>
+
+      <div class="preview-wrap" id="uploadPreviewWrap"></div>
+
+      <label class="field-label">Type d'examen</label>
+      <div class="cat-grid" id="catGrid"></div>
+
+      <label class="field-label">Intitulé</label>
+      <input class="text-input" id="labelInput" placeholder="Ex : Scanner thoracique 12 juin" />
+
+      <label class="field-label">Notes ou texte du compte rendu (optionnel)</label>
+      <textarea class="text-area" id="textInput" rows="4" placeholder="Collez ici le texte du compte rendu si vous l'avez, pour faciliter la copie plus tard."></textarea>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-buttons">
+        <button class="secondary-btn" id="cancelUpload2">Annuler</button>
+        <button class="primary-btn" id="confirmUpload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay détail -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+        <div class="icon-wrap" id="detailIconWrap" style="width:36px;height:36px;flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <h2 class="modal-title" style="font-size:16px;" id="detailLabel"></h2>
+            <button id="editLabelBtn" style="border:none;background:none;cursor:pointer;color:#8A8F98;padding:2px;flex-shrink:0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
+          <div style="font-size:12px;color:#8A8F98;" id="detailMeta"></div>
+        </div>
+      </div>
+      <button class="close-btn" id="closeDetail">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <!-- Panneau renommage -->
+    <div id="renamePanel" style="display:none;padding:12px 18px;border-bottom:1px solid #EEF0F3;background:#FAFBFC;">
+      <label class="field-label" style="margin-top:0;">Nouvel intitulé</label>
+      <div style="display:flex;gap:8px;">
+        <input id="renameInput" class="text-input" style="flex:1;" placeholder="Intitulé du compte rendu" />
+        <button id="renameConfirm" class="primary-btn" style="flex:0;padding:10px 16px;">OK</button>
+      </div>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+
+    <div class="reclass-panel" id="reclassPanel">
+      <label class="field-label" style="margin-top:0;">Nouveau type d'examen</label>
+      <div class="cat-grid" id="reclassCatGrid"></div>
+    </div>
+
+    <div class="modal-footer">
+      <div class="footer-row">
+        <button class="action-btn" id="reclassBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+          Reclasser
+        </button>
+        <button class="action-btn" id="shareBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Partager
+        </button>
+        <button class="action-btn" id="copyBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copier
+        </button>
+        <button class="action-btn gemini-btn" id="geminiBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Envoyer à Gemini
+        </button>
+        <button class="delete-btn" id="deleteBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div class="img-lightbox" id="imgLightbox">
+  <button class="img-lightbox-close" id="closeLightbox" aria-label="Fermer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <img id="lightboxImg" src="" alt="" />
+</div>
+
+<script>
+const CATEGORIES = {
+  scanner:        { label: "Scanner",        color: "#fff", bg: "#1A56A0", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>' },
+  irm:            { label: "IRM",            color: "#fff", bg: "#B91C1C", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><path d="M12 7a5 5 0 0 1 0 10"/></svg>' },
+  echo:           { label: "Échographie",   color: "#fff", bg: "#166534", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>' },
+  doppler:        { label: "Écho Doppler",  color: "#fff", bg: "#92400E", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+  analyse:        { label: "Analyse",       color: "#fff", bg: "#6B21A8", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 2v6L4.5 18a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L15 8V2"/><line x1="9" y1="2" x2="15" y2="2"/></svg>' },
+  ordonnance:     { label: "Ordo imagerie", color: "#fff", bg: "#0E7490", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12h6M9 16h6M9 8h2"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' },
+  ordonnance_med: { label: "Ordo médicale", color: "#fff", bg: "#065F46", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12h6M9 16h6M9 8h6"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 17v-6M9 14h6"/></svg>' },
+  radio:          { label: "Radio",         color: "#fff", bg: "#1E293B", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8v1M12 15v1M8 12h1M15 12h1"/></svg>' },
+};
+
+const DB_NAME = "comptes-rendus-db";
+const DB_VERSION = 1;
+const STORE_NAME = "comptes_rendus";
+let items = []; // métadonnées en mémoire, reconstruites depuis IndexedDB au chargement
+const fileCache = {}; // id -> dataUrl, cache mémoire pour éviter de relire la base à chaque ouverture
+let dbInstance = null;
+let filter = "tous";
+let query = "";
+let pendingUpload = null;
+let selectedId = null;
+let selectedCategory = "scanner";
+
+function uid() { return "cr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9); }
+function formatDate(iso) {
+  try { return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return iso; }
+}
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = "none", 2200);
+}
+function showBanner(msg) {
+  const b = document.getElementById("warningBanner");
+  if (msg) { b.textContent = msg; b.style.display = "block"; }
+  else { b.style.display = "none"; }
+}
+
+// ---------- IndexedDB : ouverture ----------
+// Chaque enregistrement contient { id, label, category, date, fileName, mime, text, dataUrl }.
+// IndexedDB tolère des centaines de Mo (contrairement à localStorage, limité à ~5-10 Mo),
+// ce qui est nécessaire pour des PDF de scanner/échographie en pleine qualité.
+function openDb() {
+  return new Promise((resolve, reject) => {
+    if (dbInstance) { resolve(dbInstance); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbPut(record) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(record);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function dbGet(id) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function dbGetAll() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+function dbDelete(id) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+// ---------- Chargement initial ----------
+async function loadItems() {
+  try {
+    const records = await dbGetAll();
+    // Les plus récents en premier ; on ne garde que les métadonnées en mémoire (pas dataUrl).
+    items = records
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .map(r => ({ id: r.id, label: r.label, category: r.category, date: r.date, fileName: r.fileName, mime: r.mime, text: r.text }));
+  } catch (e) {
+    showBanner("Impossible de charger vos comptes rendus : " + explainStorageError(e));
+  }
+  render();
+}
+
+// Sauvegarde un compte rendu complet (métadonnées + fichier) en une seule écriture.
+// Retourne { ok, error }.
+async function persistRecord(record) {
+  try {
+    await dbPut(record);
+    showBanner(null);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: explainStorageError(e) };
+  }
+}
+
+async function deleteFileStorage(id) {
+  try { await dbDelete(id); } catch (e) { /* déjà absent */ }
+  delete fileCache[id];
+}
+
+// ---------- Export / Import ----------
+async function exportAll() {
+  try {
+    showToast("Préparation de l'export…");
+    const records = await dbGetAll();
+    const json = JSON.stringify({ version: 1, exported: new Date().toISOString(), records }, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = blobUrl;
+    a.download = `comptes-rendus-backup-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    showToast(`${records.length} fiche${records.length > 1 ? "s" : ""} exportée${records.length > 1 ? "s" : ""}`);
+    localStorage.setItem("lastExportDate", Date.now().toString());
+  } catch (e) {
+    showToast("Échec de l'export : " + e.message);
+  }
+}
+
+async function importAll(file) {
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.records || !Array.isArray(data.records)) throw new Error("Format invalide");
+    let imported = 0, skipped = 0;
+    for (const record of data.records) {
+      if (!record.id || !record.label) { skipped++; continue; }
+      // Ne pas écraser une fiche existante avec le même id
+      const existing = items.find(it => it.id === record.id);
+      if (existing) { skipped++; continue; }
+      const result = await persistRecord(record);
+      if (result.ok) {
+        fileCache[record.id] = record.dataUrl;
+        items.unshift({ id: record.id, label: record.label, category: record.category, date: record.date, fileName: record.fileName, mime: record.mime, text: record.text });
+        imported++;
+      }
+    }
+    render();
+    showToast(`${imported} fiche${imported > 1 ? "s" : ""} importée${imported > 1 ? "s" : ""}${skipped > 0 ? ` (${skipped} ignorée${skipped > 1 ? "s" : ""})` : ""}`);
+  } catch (e) {
+    showToast("Échec de l'import : " + e.message);
+  }
+}
+
+document.getElementById("exportBtn").addEventListener("click", exportAll);
+document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importInput").click());
+document.getElementById("importInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (file) await importAll(file);
+});
+
+
+
+// Récupère le fichier (avec cache mémoire) pour l'affichage / partage.
+async function getFileDataUrl(id) {
+  if (fileCache[id]) return fileCache[id];
+  try {
+    const record = await dbGet(id);
+    if (record && record.dataUrl) {
+      fileCache[id] = record.dataUrl;
+      return record.dataUrl;
+    }
+  } catch (e) { /* fichier introuvable */ }
+  return null;
+}
+
+// Traduit les erreurs de stockage en message compréhensible.
+function explainStorageError(e) {
+  const name = e && e.name ? e.name : "";
+  if (name === "QuotaExceededError") {
+    return "Stockage de l'appareil plein. Supprimez un compte rendu existant ou libérez de l'espace.";
+  }
+  return (e && e.message) ? e.message : String(e);
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Téléchargement fiable d'une dataURL sur mobile : conversion en Blob + URL objet.
+// Si le navigateur bloque ce téléchargement (fréquent sur mobile), on propose le partage natif en repli.
+async function downloadDataUrl(dataUrl, fileName) {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    showToast("Téléchargement lancé");
+  } catch (err) {
+    showToast("Téléchargement impossible ici — utilisation du partage à la place");
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], fileName, { type: blob.type || "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch (shareErr) { /* aucun repli possible */ }
+    showToast("Impossible de récupérer le fichier sur cet appareil");
+  }
+}
+
+// Estimation grossière de la taille d'une dataURL base64, en Mo.
+function estimateSizeMB(dataUrl) {
+  const base64 = (dataUrl.split(",")[1] || "");
+  return (base64.length * 0.75) / (1024 * 1024);
+}
+
+// ---------- Rendu grille filtre accueil ----------
+function renderChips() {
+  const counts = {};
+  items.forEach(it => counts[it.category] = (counts[it.category] || 0) + 1);
+
+  // Bouton "Tous" pleine largeur
+  const allBtn = document.getElementById("filterAllBtn");
+  const allActive = filter === "tous";
+  allBtn.style.cssText = `width:100%;margin-bottom:10px;flex-direction:row;gap:8px;min-height:44px;padding:10px 14px;justify-content:center;border-radius:12px;background:${allActive ? "#1F2430" : "#EAECF0"};border-color:${allActive ? "#1F2430" : "#EAECF0"};box-shadow:none;`;
+  allBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="${allActive ? "#fff" : "#5A5F6A"}" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span style="color:${allActive ? "#fff" : "#5A5F6A"};font-size:13px;font-weight:700;">Tous les comptes rendus (${items.length})</span>`;
+  allBtn.onclick = () => { filter = "tous"; render(); };
+
+  // Grille 4×2 des catégories
+  const grid = document.getElementById("filterGrid");
+  grid.innerHTML = "";
+  Object.entries(CATEGORIES).forEach(([key, cfg]) => {
+    const isActive = filter === key;
+    const count = counts[key] || 0;
+    const btn = document.createElement("button");
+    btn.className = "cat-option";
+    btn.style.cssText = `background:${cfg.bg};border-color:${isActive ? cfg.color : cfg.bg};box-shadow:${isActive ? `0 0 0 2px ${cfg.color}` : "none"};opacity:${count === 0 ? "0.45" : "1"};transform:${isActive ? "scale(1.05)" : "scale(1)"};`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="${cfg.color}" stroke-width="2">${cfg.icon.match(/<svg[^>]*>(.*)<\/svg>/s)?.[1] || ""}</svg><span style="color:${cfg.color};font-weight:${isActive ? 700 : 600};">${cfg.label}</span>`;
+    btn.onclick = () => { filter = key; render(); };
+    grid.appendChild(btn);
+  });
+}
+
+// ---------- Rendu liste ----------
+function renderList() {
+  const list = document.getElementById("list");
+  const filtered = items.filter(it => {
+    const matchCat = filter === "tous" || it.category === filter;
+    const matchQuery = !query || it.label.toLowerCase().includes(query.toLowerCase()) || (it.text || "").toLowerCase().includes(query.toLowerCase());
+    return matchCat && matchQuery;
+  });
+
+  list.innerHTML = "";
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <p class="title">${items.length === 0 ? "Aucun compte rendu pour l'instant" : "Aucun résultat"}</p>
+      <p class="sub">${items.length === 0 ? "Ajoutez un scanner, une radio, une échographie, une analyse, une ordonnance…" : "Essayez un autre filtre ou une autre recherche."}</p>
+    `;
+    list.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach((item, idx) => {
+    const cfg = CATEGORIES[item.category];
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.animationDelay = `${idx * 30}ms`;
+    card.innerHTML = `
+      <div class="icon-wrap" style="background:${cfg.bg};color:${cfg.color};">${cfg.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="card-label">${escapeHtml(item.label)}</div>
+        <div class="card-meta"><span style="color:${cfg.color};font-weight:600;">${cfg.label}</span><span style="color:#C7CCD4;"> · </span><span>${formatDate(item.date)}</span></div>
+      </div>
+      <div class="card-actions">
+        <button class="icon-btn" title="Partager" data-action="share" data-id="${item.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+        <button class="icon-btn" title="Copier" data-action="copy" data-id="${item.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+    `;
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("[data-action]")) return;
+      openDetail(item.id);
+    });
+    card.querySelector('[data-action="share"]').addEventListener("click", (e) => { e.stopPropagation(); shareItem(item); });
+    card.querySelector('[data-action="copy"]').addEventListener("click", (e) => { e.stopPropagation(); copyToClipboard(item); });
+    list.appendChild(card);
+  });
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function render() {
+  renderChips();
+  renderList();
+}
+
+// ---------- Upload flow ----------
+document.getElementById("addBtn").addEventListener("click", () => {
+  document.getElementById("sourceOverlay").classList.add("open");
+});
+document.getElementById("cancelSource").addEventListener("click", () => {
+  document.getElementById("sourceOverlay").classList.remove("open");
+});
+document.getElementById("sourceOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "sourceOverlay") document.getElementById("sourceOverlay").classList.remove("open");
+});
+document.getElementById("srcFileBtn").addEventListener("click", () => {
+  document.getElementById("sourceOverlay").classList.remove("open");
+  document.getElementById("fileInput").click();
+});
+document.getElementById("srcTextBtn").addEventListener("click", () => {
+  document.getElementById("sourceOverlay").classList.remove("open");
+  pendingUpload = { dataUrl: null, name: "Compte rendu texte", mime: "text/plain" };
+  openUploadModal();
+});
+
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const dataUrl = await readFileAsDataURL(file);
+    pendingUpload = { dataUrl, name: file.name, mime: file.type };
+    openUploadModal();
+  } catch {
+    showToast("Impossible de lire le fichier.");
+  }
+});
+
+function openUploadModal() {
+  selectedCategory = "scanner";
+  const badge = document.getElementById("fileBadgeName");
+  badge.closest(".file-badge").style.display = pendingUpload.dataUrl ? "flex" : "none";
+  document.getElementById("fileBadgeName").textContent = pendingUpload.name;
+  document.getElementById("labelInput").value = pendingUpload.dataUrl ? pendingUpload.name.replace(/\.[^/.]+$/, "") : "";
+  document.getElementById("textInput").value = "";
+  renderCatGrid();
+  document.getElementById("uploadOverlay").classList.add("open");
+}
+
+function renderCatGrid() {
+  const grid = document.getElementById("catGrid");
+  grid.innerHTML = "";
+  Object.entries(CATEGORIES).forEach(([key, cfg]) => {
+    const isActive = selectedCategory === key;
+    const opt = document.createElement("button");
+    opt.className = "cat-option";
+    opt.style.cssText = `
+      background: ${cfg.bg};
+      border-color: ${isActive ? cfg.color : cfg.bg};
+      box-shadow: ${isActive ? `0 0 0 2px ${cfg.color}` : "none"};
+      opacity: ${isActive ? "1" : "0.85"};
+      transform: ${isActive ? "scale(1.05)" : "scale(1)"};
+    `;
+    opt.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="${cfg.color}" stroke-width="2">${cfg.icon.match(/<svg[^>]*>(.*)<\/svg>/s)?.[1] || ""}</svg><span style="color:${cfg.color}">${cfg.label}</span>`;
+    opt.addEventListener("click", () => { selectedCategory = key; renderCatGrid(); });
+    grid.appendChild(opt);
+  });
+}
+
+function closeUploadModal() {
+  document.getElementById("uploadOverlay").classList.remove("open");
+  pendingUpload = null;
+}
+
+document.getElementById("cancelUpload").addEventListener("click", closeUploadModal);
+document.getElementById("cancelUpload2").addEventListener("click", closeUploadModal);
+document.getElementById("uploadOverlay").addEventListener("click", (e) => { if (e.target.id === "uploadOverlay") closeUploadModal(); });
+
+document.getElementById("confirmUpload").addEventListener("click", async () => {
+  const confirmBtn = document.getElementById("confirmUpload");
+  const label = document.getElementById("labelInput").value.trim() || pendingUpload.name;
+  const text = document.getElementById("textInput").value.trim();
+  const sizeMB = pendingUpload.dataUrl ? estimateSizeMB(pendingUpload.dataUrl) : 0;
+
+  if (sizeMB > 50) {
+    showToast(`Fichier trop volumineux (~${sizeMB.toFixed(1)} Mo). Compressez-le si possible.`);
+    return;
+  }
+
+  const id = uid();
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Enregistrement…";
+
+  const record = {
+    id,
+    label,
+    category: selectedCategory,
+    date: new Date().toISOString(),
+    fileName: pendingUpload.name,
+    mime: pendingUpload.mime,
+    text,
+    dataUrl: pendingUpload.dataUrl,
+  };
+
+  const result = await persistRecord(record);
+
+  confirmBtn.disabled = false;
+  confirmBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Enregistrer';
+
+  if (!result.ok) {
+    showBanner("Échec de la sauvegarde du fichier : " + result.error);
+    showToast("Échec de la sauvegarde du fichier.");
+    return;
+  }
+
+  fileCache[id] = pendingUpload.dataUrl;
+  items.unshift({ id, label, category: selectedCategory, date: record.date, fileName: record.fileName, mime: record.mime, text });
+
+  closeUploadModal();
+  render();
+  showToast("Compte rendu ajouté");
+});
+
+// ---------- Détail ----------
+async function openDetail(id) {
+  const item = items.find(it => it.id === id);
+  if (!item) return;
+  selectedId = id;
+  const cfg = CATEGORIES[item.category];
+
+  document.getElementById("detailIconWrap").style.background = cfg.bg;
+  document.getElementById("detailIconWrap").style.color = cfg.color;
+  document.getElementById("detailIconWrap").innerHTML = cfg.icon;
+  document.getElementById("detailLabel").textContent = item.label;
+  document.getElementById("detailMeta").textContent = `${cfg.label} · ${formatDate(item.date)}`;
+
+  const body = document.getElementById("detailBody");
+  body.innerHTML = '<div class="pdf-viewer-status" style="color:#8A8F98;padding:30px 0;text-align:center;">Chargement du fichier…</div>';
+  document.getElementById("detailOverlay").classList.add("open");
+
+  const dataUrl = await getFileDataUrl(id);
+
+  // L'utilisateur peut avoir fermé ou changé d'élément pendant le chargement.
+  if (selectedId !== id) return;
+
+  body.innerHTML = "";
+
+  if (!dataUrl) {
+    body.innerHTML = '<div class="pdf-viewer-status" style="color:#C0392B;padding:30px 0;text-align:center;">Fichier introuvable. Il a peut-être été perdu lors d\'une sauvegarde précédente.</div>';
+  } else if (item.mime && item.mime.startsWith("image/")) {
+    const img = document.createElement("img");
+    img.className = "preview";
+    img.src = dataUrl;
+    img.alt = item.label;
+    img.addEventListener("click", () => openLightbox(dataUrl, item.label));
+    body.appendChild(img);
+  } else if (item.mime === "application/pdf") {
+    const viewerWrap = document.createElement("div");
+    viewerWrap.className = "pdf-viewer-wrap";
+    viewerWrap.innerHTML = '<div class="pdf-viewer-status">Chargement du document…</div>';
+    body.appendChild(viewerWrap);
+    renderPdf(dataUrl, viewerWrap);
+
+    const a = document.createElement("a");
+    a.className = "pdf-link";
+    a.href = "#";
+    a.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Télécharger le PDF`;
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await downloadDataUrl(dataUrl, item.fileName || "compte-rendu.pdf");
+    });
+    body.appendChild(a);
+  }
+
+  if (item.text) {
+    const block = document.createElement("div");
+    block.className = "text-block";
+    block.innerHTML = `<div class="label">NOTES / TEXTE</div><div class="content">${escapeHtml(item.text)}</div>`;
+    body.appendChild(block);
+  }
+}
+
+function closeDetail() {
+  document.getElementById("detailOverlay").classList.remove("open");
+  document.getElementById("reclassPanel").classList.remove("open");
+  selectedId = null;
+}
+
+function closeDetail() {
+  document.getElementById("detailOverlay").classList.remove("open");
+  document.getElementById("reclassPanel").classList.remove("open");
+  document.getElementById("renamePanel").style.display = "none";
+  selectedId = null;
+}
+
+// ---------- Renommage ----------
+document.getElementById("editLabelBtn").addEventListener("click", () => {
+  const panel = document.getElementById("renamePanel");
+  const isOpen = panel.style.display !== "none";
+  if (isOpen) { panel.style.display = "none"; return; }
+  const item = items.find(it => it.id === selectedId);
+  if (!item) return;
+  document.getElementById("renameInput").value = item.label;
+  panel.style.display = "block";
+  setTimeout(() => document.getElementById("renameInput").focus(), 50);
+});
+
+document.getElementById("renameConfirm").addEventListener("click", async () => {
+  const newLabel = document.getElementById("renameInput").value.trim();
+  if (!newLabel) return;
+  const item = items.find(it => it.id === selectedId);
+  if (!item || newLabel === item.label) { document.getElementById("renamePanel").style.display = "none"; return; }
+  const oldLabel = item.label;
+  item.label = newLabel;
+  const dataUrl = await getFileDataUrl(item.id);
+  const result = await persistRecord({ id: item.id, label: newLabel, category: item.category, date: item.date, fileName: item.fileName, mime: item.mime, text: item.text, dataUrl });
+  if (!result.ok) { item.label = oldLabel; showToast("Échec du renommage"); return; }
+  document.getElementById("detailLabel").textContent = newLabel;
+  document.getElementById("renamePanel").style.display = "none";
+  render();
+  showToast("Intitulé mis à jour");
+});
+
+document.getElementById("renameInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("renameConfirm").click();
+  if (e.key === "Escape") document.getElementById("renamePanel").style.display = "none";
+});
+
+
+document.getElementById("detailOverlay").addEventListener("click", (e) => { if (e.target.id === "detailOverlay") closeDetail(); });
+
+document.getElementById("deleteBtn").addEventListener("click", async () => {
+  const idToDelete = selectedId;
+  items = items.filter(it => it.id !== idToDelete);
+  await deleteFileStorage(idToDelete);
+  closeDetail();
+  render();
+  showToast("Supprimé");
+});
+
+document.getElementById("shareBtn").addEventListener("click", () => {
+  const item = items.find(it => it.id === selectedId);
+  if (item) shareItem(item);
+});
+document.getElementById("copyBtn").addEventListener("click", () => {
+  const item = items.find(it => it.id === selectedId);
+  if (item) copyToClipboard(item);
+});
+document.getElementById("geminiBtn").addEventListener("click", () => {
+  const item = items.find(it => it.id === selectedId);
+  if (item) sendToGemini(item);
+});
+
+// ---------- Reclassement ----------
+document.getElementById("reclassBtn").addEventListener("click", () => {
+  const panel = document.getElementById("reclassPanel");
+  const isOpen = panel.classList.contains("open");
+  if (isOpen) {
+    panel.classList.remove("open");
+    return;
+  }
+  const item = items.find(it => it.id === selectedId);
+  if (!item) return;
+  renderReclassGrid(item.category);
+  panel.classList.add("open");
+  // Le panneau s'insère juste avant le footer sticky : on s'assure qu'il est visible.
+  setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+});
+
+function renderReclassGrid(currentCategory) {
+  const grid = document.getElementById("reclassCatGrid");
+  grid.innerHTML = "";
+  Object.entries(CATEGORIES).forEach(([key, cfg]) => {
+    const isActive = key === currentCategory;
+    const opt = document.createElement("button");
+    opt.className = "cat-option";
+    opt.style.cssText = `
+      background: ${cfg.bg};
+      border-color: ${isActive ? cfg.color : cfg.bg};
+      box-shadow: ${isActive ? `0 0 0 2px ${cfg.color}` : "none"};
+      opacity: ${isActive ? "1" : "0.85"};
+      transform: ${isActive ? "scale(1.05)" : "scale(1)"};
+    `;
+    opt.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="${cfg.color}" stroke-width="2">${cfg.icon.match(/<svg[^>]*>(.*)<\/svg>/s)?.[1] || ""}</svg><span style="color:${cfg.color}">${cfg.label}</span>`;
+    opt.addEventListener("click", () => reclassifyItem(key));
+    grid.appendChild(opt);
+  });
+}
+
+async function reclassifyItem(newCategory) {
+  const item = items.find(it => it.id === selectedId);
+  if (!item) return;
+  if (item.category === newCategory) {
+    document.getElementById("reclassPanel").classList.remove("open");
+    return;
+  }
+  const previousCategory = item.category;
+  const dataUrl = await getFileDataUrl(item.id);
+  item.category = newCategory;
+  const result = await persistRecord({
+    id: item.id, label: item.label, category: newCategory, date: item.date,
+    fileName: item.fileName, mime: item.mime, text: item.text, dataUrl,
+  });
+  if (!result.ok) {
+    item.category = previousCategory; // on annule si la sauvegarde échoue
+    showToast("Échec du reclassement : " + result.error);
+    return;
+  }
+  document.getElementById("reclassPanel").classList.remove("open");
+  // Met à jour l'en-tête de la fiche déjà ouverte sans la refermer.
+  const cfg = CATEGORIES[newCategory];
+  document.getElementById("detailIconWrap").style.background = cfg.bg;
+  document.getElementById("detailIconWrap").style.color = cfg.color;
+  document.getElementById("detailIconWrap").innerHTML = cfg.icon;
+  document.getElementById("detailMeta").textContent = `${cfg.label} · ${formatDate(item.date)}`;
+  render();
+  showToast(`Reclassé en ${cfg.label}`);
+}
+
+// ---------- Auto-reclassement par mots-clés ----------
+const KEYWORDS = {
+  scanner:        ["scanner", "scan ", "tdm", "tomodensito", "a10001", "cr "],
+  irm:            ["irm", "mri", "imagerie par résonance", "résonance magnétique"],
+  echo:           ["écho", "echo", "échographie", "echographie", "ultras"],
+  doppler:        ["doppler", "écho-doppler", "echo-doppler", "vasculaire"],
+  analyse:        ["analyse", "biologie", "bilan", "nfs", "glycémie", "hba1c", "cholestérol", "prise de sang", "labo"],
+  ordonnance:     ["ordo imagerie", "ordonnance imagerie", "prescription imagerie", "radio prescr"],
+  ordonnance_med: ["ordonnance", "ordo", "traitement", "prescription", "médicament", "malartic", "posologie"],
+  radio:          ["radio ", "radiographie", "rx ", "rx-", "thorax", "poumon", "osseux", "rachis", "colonne"],
+};
+
+function guessCategory(label, fileName) {
+  const text = (label + " " + (fileName || "")).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // Priorité : on teste dans l'ordre le plus spécifique au plus générique
+  const order = ["scanner","irm","echo","doppler","radio","analyse","ordonnance","ordonnance_med"];
+  for (const key of order) {
+    const kws = KEYWORDS[key] || [];
+    if (kws.some(kw => text.includes(kw.normalize("NFD").replace(/[\u0300-\u036f]/g, "")))) {
+      return key;
+    }
+  }
+  return null; // pas de suggestion
+}
+
+async function autoClassifyAll() {
+  let changed = 0;
+  for (const item of items) {
+    const suggested = guessCategory(item.label, item.fileName);
+    if (!suggested || suggested === item.category) continue;
+    const dataUrl = await getFileDataUrl(item.id);
+    const prev = item.category;
+    item.category = suggested;
+    const result = await persistRecord({
+      id: item.id, label: item.label, category: suggested, date: item.date,
+      fileName: item.fileName, mime: item.mime, text: item.text, dataUrl,
+    });
+    if (!result.ok) { item.category = prev; }
+    else changed++;
+  }
+  render();
+  showToast(changed > 0 ? `${changed} fiche${changed > 1 ? "s" : ""} reclassée${changed > 1 ? "s" : ""}` : "Tout est déjà bien classé");
+}
+
+document.getElementById("autoClassBtn").addEventListener("click", autoClassifyAll);
+
+
+function buildSummaryText(item) {
+  const cat = CATEGORIES[item.category].label;
+  let txt = `Compte rendu — ${cat}\nIntitulé : ${item.label}\nDate d'ajout : ${formatDate(item.date)}\n`;
+  if (item.text) txt += `\nContenu :\n${item.text}\n`;
+  else txt += `\n(Fichier joint : ${item.fileName})\n`;
+  return txt;
+}
+
+async function shareItem(item) {
+  try {
+    if (navigator.share) {
+      const dataUrl = await getFileDataUrl(item.id);
+      if (dataUrl && dataUrl.startsWith("data:")) {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], item.fileName || "compte-rendu", { type: item.mime || blob.type });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: item.label, text: `${CATEGORIES[item.category].label} — ${formatDate(item.date)}`, files: [file] });
+          return;
+        }
+      }
+      await navigator.share({ title: item.label, text: `${item.label} (${CATEGORIES[item.category].label}, ${formatDate(item.date)})` });
+    } else {
+      showToast("Partage non disponible sur cet appareil");
+    }
+  } catch (err) {
+    if (err && err.name !== "AbortError") showToast("Partage annulé ou indisponible");
+  }
+}
+
+async function copyToClipboard(item) {
+  try {
+    await navigator.clipboard.writeText(buildSummaryText(item));
+    showToast("Copié dans le presse-papiers");
+  } catch {
+    showToast("Impossible de copier");
+  }
+}
+
+async function sendToGemini(item) {
+  try { await navigator.clipboard.writeText(buildSummaryText(item)); } catch {}
+  window.open("https://gemini.google.com/app", "_blank", "noopener,noreferrer");
+  showToast("Texte copié — collez-le dans Gemini");
+}
+
+// ---------- Recherche ----------
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  query = e.target.value;
+  renderList();
+});
+
+// ---------- Rendu PDF (pdf.js) ----------
+if (window["pdfjsLib"]) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+async function renderPdf(dataUrl, container) {
+  try {
+    if (!window["pdfjsLib"]) throw new Error("pdf.js indisponible");
+    const pdf = await pdfjsLib.getDocument({ url: dataUrl }).promise;
+    container.innerHTML = "";
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const scale = 1.4;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      canvas.addEventListener("click", () => openLightbox(canvas.toDataURL("image/png"), `Page ${pageNum}`));
+      container.appendChild(canvas);
+    }
+    if (pdf.numPages === 0) {
+      container.innerHTML = '<div class="pdf-viewer-status">Ce document ne contient aucune page.</div>';
+    }
+  } catch (err) {
+    container.innerHTML = '<div class="pdf-viewer-status">Aperçu indisponible — utilisez "Télécharger le PDF" ci-dessous.</div>';
+  }
+}
+
+// ---------- Lightbox image ----------
+function openLightbox(src, alt) {
+  document.getElementById("lightboxImg").src = src;
+  document.getElementById("lightboxImg").alt = alt || "";
+  document.getElementById("imgLightbox").classList.add("open");
+}
+function closeLightbox() {
+  document.getElementById("imgLightbox").classList.remove("open");
+  document.getElementById("lightboxImg").src = "";
+}
+document.getElementById("closeLightbox").addEventListener("click", closeLightbox);
+document.getElementById("imgLightbox").addEventListener("click", (e) => {
+  if (e.target.id === "imgLightbox") closeLightbox();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeLightbox();
+});
+
+// ---------- Init ----------
+async function storageAvailable() {
+  if (!window.indexedDB) return false;
+  try {
+    await openDb();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---------- Bannière rappel export ----------
+function initBackupBanner() {
+  const dismissed = localStorage.getItem("backupBannerDismissed");
+  const lastExport = localStorage.getItem("lastExportDate");
+  const now = Date.now();
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+  // Afficher si : jamais ignoré ET (jamais exporté OU dernier export > 7 jours)
+  const shouldShow = !dismissed && (!lastExport || (now - parseInt(lastExport)) > sevenDays);
+  if (shouldShow) document.getElementById("backupBanner").style.display = "block";
+
+  document.getElementById("bannerExportBtn").addEventListener("click", () => {
+    localStorage.setItem("lastExportDate", Date.now().toString());
+    document.getElementById("backupBanner").style.display = "none";
+    exportAll();
+  });
+
+  document.getElementById("bannerDismissBtn").addEventListener("click", () => {
+    localStorage.setItem("backupBannerDismissed", "1");
+    document.getElementById("backupBanner").style.display = "none";
+  });
+}
+
+(async () => {
+  if (!(await storageAvailable())) {
+    showBanner("Le stockage de l'appareil est indisponible (navigation privée stricte ou navigateur non compatible). Vos comptes rendus ne pourront pas être sauvegardés.");
+  }
+  loadItems();
+  initBackupBanner();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+
+</script>
+</body>
+</html>
